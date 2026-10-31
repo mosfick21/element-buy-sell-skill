@@ -1,0 +1,17 @@
+{
+  "name": "element-market-skill",
+  "version": "1.0.0",
+  "description": "List, buy and price NFTs on Element Market (BNB Chain) from an AI agent.",
+  "bin": {
+    "element-market-skill": "bin/install.js"
+  },
+  "files": [
+    "bin",
+    "scripts",
+    "SKILL.md",
+    "README.md",
+    "assets"
+  ],
+  "license": "MIT",
+  "repository": "github:mosfick21/element-market-skill"
+}

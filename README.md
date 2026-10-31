@@ -19,6 +19,12 @@ No paid API key. All signing goes through the Binance Agentic Wallet.
 ## Install
 
 ```bash
+npx github:mosfick21/element-market-skill
+```
+
+Or manually:
+
+```bash
 git clone https://github.com/mosfick21/element-market-skill
 cd element-market-skill
 pip install eth-account eth-abi eth-utils
