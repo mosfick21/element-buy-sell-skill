@@ -1,94 +1,80 @@
 <div align="center">
 
-# Element Market Skill
+<img src="assets/element.jpeg" alt="Element Market" width="100%"/>
 
-**List, buy and price NFTs on Element Market (BNB Chain) from an AI agent. No paid API key.**
+# element-market-skill
 
-![chain](https://img.shields.io/badge/chain-BNB%20Chain-F0B90B) ![python](https://img.shields.io/badge/python-3.10%2B-3776AB) ![wallet](https://img.shields.io/badge/wallet-Binance%20Agentic%20Wallet-black) ![license](https://img.shields.io/badge/license-MIT-green)
+List, buy and price NFTs on Element Market (BNB Chain) from an AI agent.
+No paid API key. All signing goes through the Binance Agentic Wallet.
+
+![BNB Chain](https://img.shields.io/badge/BNB_Chain-F0B90B?style=flat-square&logo=binance&logoColor=black)
+![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=flat-square&logo=python&logoColor=white)
+![Agent Skill](https://img.shields.io/badge/Agent-Skill-111111?style=flat-square)
+![License](https://img.shields.io/badge/License-MIT-22c55e?style=flat-square)
 
 </div>
 
-## Contents
-- [What it is](#what-it-is) · [How it works](#how-it-works) · [Quick start](#quick-start) · [Usage](#usage) · [Example](#example-output) · [Security](#security) · [FAQ](#faq)
+---
 
-## What it is
+## Install
 
-| | |
-|---|---|
-| Market | Element Market, BNB Chain |
-| Signer | Binance Agentic Wallet CLI (`baw`), keys never leave it |
-| Auth | Element web app public key, no paid OpenAPI key |
-| Format | Agent skill (`SKILL.md`) + one Python CLI |
-
-## How it works
-
-```
- agent ──> em.py ──> Element API (orders, GraphQL)
-             │
-             └──> baw ──> sign EIP-712 / send tx ──> ElementEx contract
-```
-
-1. Reads (floor, item, listings) go through Element's GraphQL.
-2. **List**: fetch nonce + fees, build the BatchSignedERC721 order, sign it with baw, verify the signer, post it.
-3. **Buy**: fetch the order's exchange data, encode the fill locally, simulate, send with baw.
-4. Nothing is sent without `--send`.
-
-## Features
-- Gasless listing (one-time approval per collection)
-- Buy any BNB-priced ERC721 listing by order id
-- Mixed-currency floor (BNB and USDT listings)
-- Dry run by default, simulation before every send
-
-## Quick start
 ```bash
-git clone https://github.com/<you>/element-market-skill && cd element-market-skill
+git clone https://github.com/mosfick21/element-market-skill
+cd element-market-skill
 pip install eth-account eth-abi eth-utils
-mkdir -p ~/.config/element-market && cp wallets.example.json ~/.config/element-market/wallets.json  # put your agent wallet
-python3 scripts/em.py floor snakeid 3
 ```
 
-## Usage
+Add your agent wallet:
 
-| Command | Description |
+```bash
+mkdir -p ~/.config/element-market
+echo '{"main": "0xYourAgentWallet"}' > ~/.config/element-market/wallets.json
+```
+
+## Commands
+
+| Command | Action |
 |---|---|
-| `floor <slug> [n]` | cheapest listings |
-| `item <nft> <tokenId>` | asset info, best ask/bid |
-| `mine <wallet>` | your active listings |
-| `list <wallet> <nft> <tokenId> <priceBNB> [--days N] [--send]` | list an NFT |
-| `buy <wallet> <orderId> [--send]` | buy a listing |
-| `cancel <wallet> <nonce> [--send]` | cancel a listing |
+| `floor <slug> [n]` | Cheapest listings |
+| `item <nft> <id>` | Asset, best ask / bid |
+| `mine <wallet>` | Your active listings |
+| `list <wallet> <nft> <id> <bnb> [--send]` | List an NFT |
+| `buy <wallet> <orderId> [--send]` | Buy a listing |
+| `cancel <wallet> <nonce> [--send]` | Cancel a listing |
+
+```bash
+python3 scripts/em.py list main 0xNFT 3079 0.0004 --send
+```
+
+Without `--send`, nothing is signed or sent.
+
+## Output
+
+```json
+{
+  "priceBNB": 0.00038,
+  "youGetBNB": 0.0003534,
+  "approved": true,
+  "ok": true,
+  "orderId": "4057243579547595328"
+}
+```
+
+## Config
 
 | Env | Default |
 |---|---|
 | `EM_WALLETS` | `~/.config/element-market/wallets.json` |
 | `EM_BAW_DIR` | `~/.baw-{name}` |
 | `EM_BAW_BIN` | `baw` |
-| `BSC_RPC` | public BNB Chain RPC |
+| `BSC_RPC` | Public BNB Chain RPC |
 
-## Example output
-```json
-{
- "priceBNB": 0.00038,
- "platformFeeBps": 200,
- "royaltyBps": 500,
- "youGetBNB": 0.0003534,
- "approved": true,
- "ok": true,
- "post": {"successList": [{"assetTokenId": "3079", "orderId": "4057..."}]}
-}
-```
+## Notes
 
-## Security
-- No private keys: every signature and tx goes through `baw`.
-- `wallets.json` holds addresses only and is git-ignored.
-- Dry run unless `--send`.
+- Listing is gasless. Only the first approval per collection costs gas.
+- No private keys anywhere. `wallets.json` holds addresses only.
+- BNB-priced ERC-721 is supported.
 
-## FAQ
-<details><summary>Do I need an Element API key?</summary>No. The tool uses the same public key as the element.market website.</details>
-<details><summary>Does listing cost gas?</summary>No. Only the first approval per collection is an on-chain tx.</details>
-<details><summary>What if Element changes its key?</summary>Set <code>ELEMENT_SITE_KEY</code> and <code>ELEMENT_SITE_SECRET</code> from the site's <code>element-sdk-*.js</code>. See SKILL.md.</details>
+---
 
-## Requirements
-Python 3.10+, `eth-account`, `eth-abi`, `eth-utils`, Binance Agentic Wallet CLI.
-
-<sub>Unofficial tool. Not affiliated with Element or Binance. Use at your own risk.</sub>
+<div align="right"><sub><b>DYOR.</b> Unofficial. Not affiliated with Element or Binance.</sub></div>
