@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Copies this skill into an agent skills folder and installs the Python deps.
-// Usage: npx github:mosfick21/element-market-skill [target-dir]
+// Usage: npx github:mosfick21/element-buy-sell-skill [target-dir]
 const fs = require("fs"), path = require("path"), os = require("os"), { spawnSync } = require("child_process");
 
 const home = os.homedir();

@@ -2,14 +2,16 @@
 
 <img src="assets/element.jpeg" alt="Element Market" width="100%"/>
 
-# element-market-skill
+# element-buy-sell-skill
 
-List, buy and price NFTs on Element Market (BNB Chain) from an AI agent.
-No paid API key. All signing goes through the Binance Agentic Wallet.
+Buy and sell NFTs on Element Market from your **Binance Agentic Wallet**.
+
+**No private key · No API key · Just your agent wallet.**
 
 ![BNB Chain](https://img.shields.io/badge/BNB_Chain-F0B90B?style=flat-square&logo=binance&logoColor=black)
 ![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=flat-square&logo=python&logoColor=white)
-![Agent Skill](https://img.shields.io/badge/Agent-Skill-111111?style=flat-square)
+![Binance Agentic Wallet](https://img.shields.io/badge/Binance-Agentic_Wallet-F0B90B?style=flat-square&logo=binance&logoColor=black)
+![No API Key](https://img.shields.io/badge/API_Key-Not_Needed-22c55e?style=flat-square)
 ![License](https://img.shields.io/badge/License-MIT-22c55e?style=flat-square)
 
 </div>
@@ -19,13 +21,13 @@ No paid API key. All signing goes through the Binance Agentic Wallet.
 ## Install
 
 ```bash
-npx github:mosfick21/element-market-skill
+npx github:mosfick21/element-buy-sell-skill
 ```
 
 Or manually:
 
 ```bash
-git clone https://github.com/mosfick21/element-market-skill
+git clone https://github.com/mosfick21/element-buy-sell-skill
 cd element-market-skill
 pip install eth-account eth-abi eth-utils
 ```
@@ -78,7 +80,9 @@ Without `--send`, nothing is signed or sent.
 ## Notes
 
 - Listing is gasless. Only the first approval per collection costs gas.
-- No private keys anywhere. `wallets.json` holds addresses only.
+- Built for the Binance Agentic Wallet. It signs every order and tx, so no private key is stored anywhere.
+- No Element API key needed.
+- `wallets.json` holds addresses only.
 - BNB-priced ERC-721 is supported.
 
 ---
