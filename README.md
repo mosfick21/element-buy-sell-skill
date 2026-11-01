@@ -47,9 +47,10 @@ echo '{"main": "0xYourAgentWallet"}' > ~/.config/element-market/wallets.json
 | `item <nft> <id>` | Asset, best ask / bid |
 | `mine <wallet>` | Your active listings |
 | `list <wallet> <nft> <id> <bnb> [--send]` | List an NFT |
-| `buy <wallet> <orderId> [--send]` | Buy a listing |
+| `buy <wallet> <orderId> [--max bnb] [--send]` | Buy a listing (`--send` needs `--max`) |
 | `cancel <wallet> <nonce> [--send]` | Cancel a listing |
-| `accept <wallet> <nft> <id> [probeIds] [--min bnb] [--send]` | Sell into the best offer |
+| `accept <wallet> <nft> <id> [probeIds] [--min bnb] [--single] [--send]` | Sell into the best offer (`--send` needs `--min`) |
+| `revoke <wallet> <nft> [--send]` | Remove Element's approval for a collection |
 
 ```bash
 python3 scripts/em.py list main 0xNFT 3079 0.0004 --send
@@ -68,6 +69,14 @@ Without `--send`, nothing is signed or sent.
   "orderId": "4057243579547595328"
 }
 ```
+
+## Safety
+
+- Nothing is signed or sent without `--send`.
+- `buy --send` refuses to run without a `--max` price cap; `accept --send` refuses without a `--min` floor.
+- Selling needs Element's exchange to be approved for the NFT. By default that is collection-wide (`setApprovalForAll`), like every NFT market. Use `accept --single` to approve only the one token, and `revoke` to remove a collection approval when you are done.
+- No private key or seed phrase is ever read. Signing goes through the Binance Agentic Wallet CLI.
+- The Element web key in the script is the public key shipped in element.market's own JavaScript, not a user secret.
 
 ## Config
 

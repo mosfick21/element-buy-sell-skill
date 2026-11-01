@@ -13,10 +13,11 @@ Without `--send` it signs and sends nothing; it only builds and simulates. Show 
 | `floor <slug> [n]` | cheapest BUY_NOW listings: price, paymentToken, orderId, maker |
 | `item <nft> <tokenId>` | name, best ask/bid, collection slug, royalty |
 | `mine <wallet>` | the wallet's active Element listings |
-| `buy <wallet> <orderId> [--send]` | build the fill tx, simulate, send through baw |
+| `buy <wallet> <orderId> [--max BNB] [--send]` | build the fill tx, simulate, send through baw; `--send` requires `--max` (price cap) |
 | `list <wallet> <nft> <tokenId> <priceBNB> [--days N] [--send]` | approve if needed, sign with baw, verify signer, post |
 | `cancel <wallet> <nonce> [--send]` | cancel one listing by its nonce |
-| `accept <wallet> <nft> <tokenId> [probeIds...] [--min BNB] [--send]` | sell into the best WBNB offer: approve if needed, simulate, send. Fresh mints not yet indexed: pass other token ids of the same collection as probeIds (collection offers fit any token) |
+| `accept <wallet> <nft> <tokenId> [probeIds...] [--min BNB] [--single] [--send]` | sell into the best WBNB offer; `--send` requires `--min`; `--single` approves only this token instead of the whole collection. Fresh mints not yet indexed: pass other token ids of the same collection as probeIds |
+| `revoke <wallet> <nft> [--send]` | `setApprovalForAll(ElementEx, false)`: remove the collection approval after selling |
 
 ## Setup
 1. Install and log in to the Binance Agentic Wallet CLI (`baw`), one profile dir per wallet (default `~/.baw-<name>`, override with `EM_BAW_DIR`).

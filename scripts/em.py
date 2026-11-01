@@ -5,12 +5,15 @@ Usage (CLI, prints JSON):
   em.py floor  <slug> [n]                    cheapest BUY_NOW listings of a collection
   em.py item   <nft> <tokenId>               asset info + best ask/bid + collection fees
   em.py mine   <wallet>                      wallet's active Element listings
-  em.py buy    <wallet> <orderId> [--send]   build buy tx, simulate; --send executes via baw
+  em.py buy    <wallet> <orderId> [--max BNB] [--send]
+                                             build buy tx, simulate; --send (needs --max) executes via baw
   em.py list   <wallet> <nft> <tokenId> <priceBNB> [--days N] [--send]
                                              approve check + sign + post a BNB listing
   em.py cancel <wallet> <nonce> [--send]     cancel one of our listings by its nonce
-  em.py accept <wallet> <nft> <tokenId> [probeIds...] [--min BNB] [--send]
-                                             sell into the best WBNB offer (approve if needed)
+  em.py accept <wallet> <nft> <tokenId> [probeIds...] [--min BNB] [--single] [--send]
+                                             sell into the best WBNB offer; --send needs --min;
+                                             --single approves only this token, not the collection
+  em.py revoke <wallet> <nft> [--send]       remove ElementEx's collection-wide approval
 
 Without --send nothing is signed or sent: it only builds and simulates.
 Wallet = a name from the wallets file (see load_wallets). Each name maps to a Binance Agentic
@@ -246,8 +249,9 @@ def encode_fill(ed, taker):
     return data, value
 
 
-def buy(wallet, order_id, send=False):
+def buy(wallet, order_id, send=False, max_bnb=None):
     me = WALLETS[wallet]
+    if send and max_bnb is None: return {"ok": False, "error": "--send needs --max <BNB> (price cap)"}
     o = api("/v3/orders/getOrderExchangeDataByOrderId", [{"chainMid": CHAIN_MID, "orderId": str(order_id), "buyer": me.lower()}])[0]
     if not o.get("isValid"): return {"ok": False, "error": "order not valid: " + str(o.get("errorDetail"))}
     ed = json.loads(o["exchangeData"])
@@ -259,6 +263,8 @@ def buy(wallet, order_id, send=False):
     sim = eth_call(me, EX, data, value)
     res = {"nft": o["contractAddress"], "tokenId": o["tokenId"], "priceBNB": value / 1e18, "balanceBNB": bal / 1e18,
            "simulate": "OK" if "result" in sim else sim.get("error", {}).get("message", "")[:160]}
+    if max_bnb is not None and value > int(round(float(max_bnb) * 1e18)):
+        res.update({"ok": False, "error": f"price {value / 1e18} above --max {max_bnb}"}); return res
     if send and "result" in sim: res.update(baw_send(wallet, EX, data, value))
     return res
 
@@ -281,6 +287,36 @@ BS_TYPES = {
 def is_approved(owner, nft):
     r = eth_call(owner, nft, sel("isApprovedForAll(address,address)") + owner[2:].lower().zfill(64) + EX[2:].lower().zfill(64))
     return int(r.get("result", "0x0") or "0x0", 16) == 1
+
+
+
+def approved_for(owner, nft, token_id=None):
+    """True if ElementEx may move this token: collection-wide approval, or (token_id given) a single-token approve()."""
+    if is_approved(owner, nft): return True
+    if token_id is None: return False
+    r = eth_call(ZERO, nft, sel("getApproved(uint256)") + format(int(token_id), "064x"))
+    return ("0x" + (r.get("result") or "0x")[-40:]).lower() == EX.lower()
+
+
+def grant_approval(wallet, nft, token_id=None):
+    """single-token approve(EX, id) when token_id is given, else setApprovalForAll(EX, true)."""
+    if token_id is not None:
+        return baw_send(wallet, nft, sel("approve(address,uint256)") + EX[2:].lower().zfill(64) + format(int(token_id), "064x"))
+    return baw_send(wallet, nft, sel("setApprovalForAll(address,bool)") + EX[2:].lower().zfill(64) + "1".zfill(64))
+
+
+def revoke(wallet, nft, send=False):
+    """Withdraw the collection-wide approval given to ElementEx: setApprovalForAll(EX, false)."""
+    me = WALLETS[wallet]; nft = nft.lower()
+    res = {"nft": nft, "approvedForAll": is_approved(me, nft)}
+    if not res["approvedForAll"]: res["note"] = "nothing to revoke"; return res
+    data = sel("setApprovalForAll(address,bool)") + EX[2:].lower().zfill(64) + "0".zfill(64)
+    sim = eth_call(me, nft, data)
+    res["simulation"] = "ok" if "result" in sim else (sim.get("error") or {}).get("message")
+    if send and res["simulation"] == "ok":
+        res["revokeTx"] = baw_send(wallet, nft, data)
+        res["approvedForAll"] = is_approved(me, nft)
+    return res
 
 
 def owner_of(nft, tid):
@@ -368,8 +404,9 @@ def best_bid(nft, token_id, probe_ids=()):
     return None
 
 
-def accept(wallet, nft, token_id, min_bnb=None, probe_ids=(), send=False):
+def accept(wallet, nft, token_id, min_bnb=None, probe_ids=(), send=False, single=False):
     me = WALLETS[wallet]; nft = nft.lower()
+    if send and min_bnb is None: return {"ok": False, "error": "--send needs --min <BNB> (lowest offer you accept)"}
     if owner_of(nft, token_id) != me.lower(): return {"ok": False, "error": "wallet does not own this token"}
     bid = best_bid(nft, token_id, probe_ids)
     if not bid: return {"ok": False, "error": "no WBNB offer found"}
@@ -388,8 +425,8 @@ def accept(wallet, nft, token_id, min_bnb=None, probe_ids=(), send=False):
          "(uint8,uint8,bytes32,bytes32)", "uint256", "bool", "bytes"],
         [order, (s["signatureType"], s["v"], bytes.fromhex(s["r"][2:]), bytes.fromhex(s["s"][2:])), int(token_id), True,
          bytes.fromhex((ed.get("extraData") or "0x")[2:])]).hex()
-    res = {"tokenId": str(token_id), "offerBNB": float(bid["price"]), "youGetBNB": int(o["erc20TokenAmount"]) / 1e18,
-           "buyer": o["maker"], "orderId": bid["orderId"], "approved": is_approved(me, nft)}
+    res = {"tokenId": str(token_id), "offerBNB": float(bid["price"]), "youGetBNB": int(o["erc20TokenAmount"]) / max(1, int(bid.get("quantity") or 1)) / 1e18,  # multi-qty offers carry the total
+           "buyer": o["maker"], "orderId": bid["orderId"], "approved": approved_for(me, nft, token_id)}
     if res["approved"]:
         sim = eth_call(me, EX, data)
         res["simulation"] = "ok" if "result" in sim else (sim.get("error") or {}).get("message")
@@ -397,8 +434,8 @@ def accept(wallet, nft, token_id, min_bnb=None, probe_ids=(), send=False):
         res["simulation"] = "needs approval first (sent with --send)"
     if not send: return res
     if not res["approved"]:
-        ap = baw_send(wallet, nft, sel("setApprovalForAll(address,bool)") + EX[2:].lower().zfill(64) + "1".zfill(64))
-        res["approveTx"] = ap
+        ap = grant_approval(wallet, nft, token_id if single else None)
+        res["approveTx"] = ap; res["approval"] = "single token" if single else "whole collection"
         if not ap.get("ok"): return res
         sim = eth_call(me, EX, data)
         res["simulation"] = "ok" if "result" in sim else (sim.get("error") or {}).get("message")
@@ -415,13 +452,18 @@ def main(a):
     if cmd == "floor": out = floor(a[1], int(a[2]) if len(a) > 2 else 5)
     elif cmd == "item": out = item(a[1], a[2])
     elif cmd == "mine": out = mine(a[1])
-    elif cmd == "buy": out = buy(a[1], a[2], send)
+    elif cmd == "buy":
+        mx = None
+        if "--max" in a: i = a.index("--max"); mx = a[i + 1]; del a[i:i + 2]
+        out = buy(a[1], a[2], send, mx)
     elif cmd == "list": out = list_nft(a[1], a[2], a[3], a[4], days, send)
     elif cmd == "cancel": out = cancel(a[1], a[2], send)
     elif cmd == "accept":
         mn = None
         if "--min" in a: i = a.index("--min"); mn = a[i + 1]; del a[i:i + 2]
-        out = accept(a[1], a[2], a[3], mn, tuple(a[4:]), send)
+        single = "--single" in a; a = [x for x in a if x != "--single"]
+        out = accept(a[1], a[2], a[3], mn, tuple(a[4:]), send, single)
+    elif cmd == "revoke": out = revoke(a[1], a[2], send)
     else: print(__doc__); return
     print(json.dumps(out, indent=1, default=str))
 
