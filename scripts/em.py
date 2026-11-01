@@ -9,6 +9,8 @@ Usage (CLI, prints JSON):
   em.py list   <wallet> <nft> <tokenId> <priceBNB> [--days N] [--send]
                                              approve check + sign + post a BNB listing
   em.py cancel <wallet> <nonce> [--send]     cancel one of our listings by its nonce
+  em.py accept <wallet> <nft> <tokenId> [probeIds...] [--min BNB] [--send]
+                                             sell into the best WBNB offer (approve if needed)
 
 Without --send nothing is signed or sent: it only builds and simulates.
 Wallet = a name from the wallets file (see load_wallets). Each name maps to a Binance Agentic
@@ -346,6 +348,65 @@ def cancel(wallet, nonce, send=False):
 
 
 # ------------------------------------------------------------------ cli
+
+# ------------------------------------------------------------------ accept offer (sell into a bid)
+SELL_SIG = ("sellERC721((address,address,uint256,uint256,address,uint256,(address,uint256,bytes)[],address,uint256,"
+            "(address,bytes)[]),(uint8,uint8,bytes32,bytes32),uint256,bool,bytes)")
+WBNB = "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c"
+
+
+def best_bid(nft, token_id, probe_ids=()):
+    """Best BNB/WBNB bid for a token. Fresh mints are often not indexed yet (asset = null); a collection
+    offer (tokenId 0) fits any token, so fall back to another indexed token of the same collection."""
+    for t in (token_id, *probe_ids):
+        try:
+            a = item(nft, t)
+            b = a and (a.get("orderData") or {}).get("bestBid")
+            if b and b["paymentToken"].lower() == WBNB: return b
+        except Exception:
+            pass
+    return None
+
+
+def accept(wallet, nft, token_id, min_bnb=None, probe_ids=(), send=False):
+    me = WALLETS[wallet]; nft = nft.lower()
+    if owner_of(nft, token_id) != me.lower(): return {"ok": False, "error": "wallet does not own this token"}
+    bid = best_bid(nft, token_id, probe_ids)
+    if not bid: return {"ok": False, "error": "no WBNB offer found"}
+    if min_bnb is not None and float(bid["price"]) < float(min_bnb):
+        return {"ok": False, "error": f"best offer {bid['price']} below min {min_bnb}"}
+    # buyer=<seller> makes Element return the oracle signature for this fill in extraData
+    ed = json.loads(api("/v3/orders/getOrderExchangeDataByOrderId",
+                        [{"chainMid": CHAIN_MID, "orderId": bid["orderId"], "buyer": me.lower()}])[0]["exchangeData"])
+    o, s = ed["order"], ed["signature"]
+    order = (o["maker"], o["taker"], int(o["expiry"], 16), int(o["nonce"]), o["erc20Token"], int(o["erc20TokenAmount"]),
+             [(f["recipient"], int(f["amount"]), bytes.fromhex(f["feeData"][2:])) for f in o["fees"]], o["nft"], int(o["nftId"]),
+             [(p["propertyValidator"], bytes.fromhex(p["propertyData"][2:])) for p in o["nftProperties"]])
+    # the oracle signature goes in the takerData argument (not appended to calldata)
+    data = sel(SELL_SIG) + abi_encode(
+        ["(address,address,uint256,uint256,address,uint256,(address,uint256,bytes)[],address,uint256,(address,bytes)[])",
+         "(uint8,uint8,bytes32,bytes32)", "uint256", "bool", "bytes"],
+        [order, (s["signatureType"], s["v"], bytes.fromhex(s["r"][2:]), bytes.fromhex(s["s"][2:])), int(token_id), True,
+         bytes.fromhex((ed.get("extraData") or "0x")[2:])]).hex()
+    res = {"tokenId": str(token_id), "offerBNB": float(bid["price"]), "youGetBNB": int(o["erc20TokenAmount"]) / 1e18,
+           "buyer": o["maker"], "orderId": bid["orderId"], "approved": is_approved(me, nft)}
+    if res["approved"]:
+        sim = eth_call(me, EX, data)
+        res["simulation"] = "ok" if "result" in sim else (sim.get("error") or {}).get("message")
+    else:
+        res["simulation"] = "needs approval first (sent with --send)"
+    if not send: return res
+    if not res["approved"]:
+        ap = baw_send(wallet, nft, sel("setApprovalForAll(address,bool)") + EX[2:].lower().zfill(64) + "1".zfill(64))
+        res["approveTx"] = ap
+        if not ap.get("ok"): return res
+        sim = eth_call(me, EX, data)
+        res["simulation"] = "ok" if "result" in sim else (sim.get("error") or {}).get("message")
+    if res["simulation"] != "ok": return res
+    res["sellTx"] = baw_send(wallet, EX, data)
+    return res
+
+
 def main(a):
     send = "--send" in a; a = [x for x in a if x != "--send"]
     days = 30
@@ -357,6 +418,10 @@ def main(a):
     elif cmd == "buy": out = buy(a[1], a[2], send)
     elif cmd == "list": out = list_nft(a[1], a[2], a[3], a[4], days, send)
     elif cmd == "cancel": out = cancel(a[1], a[2], send)
+    elif cmd == "accept":
+        mn = None
+        if "--min" in a: i = a.index("--min"); mn = a[i + 1]; del a[i:i + 2]
+        out = accept(a[1], a[2], a[3], mn, tuple(a[4:]), send)
     else: print(__doc__); return
     print(json.dumps(out, indent=1, default=str))
 

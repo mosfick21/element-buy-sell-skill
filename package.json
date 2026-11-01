@@ -1,6 +1,6 @@
 {
   "name": "element-buy-sell-skill",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "List, buy and price NFTs on Element Market (BNB Chain) from an AI agent.",
   "bin": {
     "element-buy-sell-skill": "bin/install.js"

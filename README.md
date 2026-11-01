@@ -49,6 +49,7 @@ echo '{"main": "0xYourAgentWallet"}' > ~/.config/element-market/wallets.json
 | `list <wallet> <nft> <id> <bnb> [--send]` | List an NFT |
 | `buy <wallet> <orderId> [--send]` | Buy a listing |
 | `cancel <wallet> <nonce> [--send]` | Cancel a listing |
+| `accept <wallet> <nft> <id> [probeIds] [--min bnb] [--send]` | Sell into the best offer |
 
 ```bash
 python3 scripts/em.py list main 0xNFT 3079 0.0004 --send
